@@ -1,20 +1,7 @@
 {
-  "version": 2,
-  "outputDirectory": "Elite-klan/dist",
-  "builds": [
-    {
-      "src": "Elite-klan/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "Elite-klan/dist"
-      }
-    }
-  ],
-  "routes": [
-    { "handle": "filesystem" },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
