@@ -1,5 +1,6 @@
 import type { SvgIconProps } from '@mui/material/SvgIcon';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -7,6 +8,7 @@ import {
   CardContent,
   CardMedia,
   Chip,
+  CircularProgress,
   Paper,
   Stack,
   SvgIcon,
@@ -15,74 +17,11 @@ import {
 import Grid from '@mui/material/Grid';
 import AppleIcon from '@mui/icons-material/Apple';
 import YouTubeIcon from '@mui/icons-material/YouTube';
-
-type Release = {
-  title: string;
-  date: string;
-  art: string;
-  description: string;
-  genres: string[];
-  links: {
-    spotify: string;
-    apple: string;
-    youtube: string;
-  };
-};
-
-const releases: Release[] = [
-  {
-    title: 'Neon Skyline',
-    date: '2024-05-17',
-    art: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80',
-    description:
-      'Un himno synthwave que combina melodías nostálgicas con un bajo contundente para las noches más largas.',
-    genres: ['Synthwave', 'Electronic', 'Midtempo'],
-    links: {
-      spotify: 'https://open.spotify.com/track/1zcJH7zVhk2PzvgXDpPT8f',
-      apple: 'https://music.apple.com/album/neon-skyline-single/1440881047',
-      youtube: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    },
-  },
-  {
-    title: 'Digital Mirage',
-    date: '2023-11-03',
-    art: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=800&q=80',
-    description:
-      'Texturas vaporwave y ritmos nostálgicos que se fusionan con percusiones modernas para crear una atmósfera única.',
-    genres: ['Vaporwave', 'Downtempo'],
-    links: {
-      spotify: 'https://open.spotify.com/track/6DCZcSspjsKoFjzjrWoCdn',
-      apple: 'https://music.apple.com/album/digital-mirage-single/1573565310',
-      youtube: 'https://www.youtube.com/watch?v=u9Mv98Gr5pY',
-    },
-  },
-  {
-    title: 'Electric Dreams',
-    date: '2023-04-28',
-    art: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80',
-    description:
-      'Una colaboración con vocalistas invitados que explora paisajes sonoros oníricos y ritmos energéticos.',
-    genres: ['Synthpop', 'Dance'],
-    links: {
-      spotify: 'https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b',
-      apple: 'https://music.apple.com/album/electric-dreams/1440833086',
-      youtube: 'https://www.youtube.com/watch?v=QzcvRDWgRIE',
-    },
-  },
-  {
-    title: 'Pulse Runner',
-    date: '2022-10-14',
-    art: 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=800&q=80',
-    description:
-      'Beats potentes y sintetizadores agresivos para acompañar tus entrenamientos más intensos.',
-    genres: ['Electro', 'Bass'],
-    links: {
-      spotify: 'https://open.spotify.com/track/3eekarcy7kvN4yt5ZFzltW',
-      apple: 'https://music.apple.com/album/pulse-runner-single/1468058165',
-      youtube: 'https://www.youtube.com/watch?v=CS9OO0S5w2k',
-    },
-  },
-];
+import dayjs from 'dayjs';
+import 'dayjs/locale/es';
+import { listReleases, listSiteSettings } from '../services/contentRepository';
+import { useContentQuery } from '../hooks/useContentQuery';
+import type { Release, SiteSettings } from '../types/content';
 
 const SpotifyIcon = (props: SvgIconProps) => (
   <SvgIcon {...props} viewBox="0 0 496 512">
@@ -91,160 +30,214 @@ const SpotifyIcon = (props: SvgIconProps) => (
 );
 
 export function Music() {
-  const [latestRelease, ...catalog] = releases;
+  dayjs.locale('es');
+
+  const {
+    data: releases,
+    loading: releasesLoading,
+    error: releasesError,
+  } = useContentQuery<Release[]>(listReleases, []);
+  const {
+    data: settings,
+    loading: settingsLoading,
+    error: settingsError,
+  } = useContentQuery<SiteSettings[]>(listSiteSettings, []);
+
+  const siteSettings = settings?.[0] ?? null;
+  const latestRelease = releases?.[0] ?? null;
+  const catalog = releases ? releases.slice(1) : [];
+
+  const isLoading = releasesLoading || settingsLoading;
+  const error = releasesError || settingsError;
+
+  const playlistEmbedUrl = siteSettings?.playlistEmbedUrl ?? null;
 
   return (
     <Box>
       <Typography variant="h3" sx={{ mb: 4 }}>
         Música
       </Typography>
-      <Stack spacing={4}>
-        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={4} alignItems="stretch">
-          <Card sx={{ flex: 1, display: 'flex', flexDirection: { xs: 'column', md: 'row' } }}>
-            <Box
-              component="img"
-              src={latestRelease.art}
-              alt={latestRelease.title}
-              sx={{
-                width: { xs: '100%', md: 320 },
-                height: { xs: 220, md: '100%' },
-                objectFit: 'cover',
-              }}
-            />
-            <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="overline" sx={{ letterSpacing: 1 }}>
-                Último lanzamiento · {latestRelease.date}
-              </Typography>
-              <Typography variant="h4" sx={{ mt: 1, mb: 2 }}>
-                {latestRelease.title}
-              </Typography>
-              <Typography sx={{ mb: 3 }}>{latestRelease.description}</Typography>
-              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, mb: 3 }}>
-                {latestRelease.genres.map((genre) => (
-                  <Chip key={genre} label={genre} color="primary" variant="outlined" />
-                ))}
-              </Stack>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 'auto' }}>
-                <Button
-                  component="a"
-                  href={latestRelease.links.spotify}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  variant="contained"
-                  startIcon={<SpotifyIcon />}
-                >
-                  Escuchar en Spotify
-                </Button>
-                <Button
-                  component="a"
-                  href={latestRelease.links.apple}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  variant="outlined"
-                  startIcon={<AppleIcon />}
-                >
-                  Apple Music
-                </Button>
-                <Button
-                  component="a"
-                  href={latestRelease.links.youtube}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  variant="outlined"
-                  startIcon={<YouTubeIcon />}
-                >
-                  YouTube
-                </Button>
-              </Stack>
-            </CardContent>
-          </Card>
-
-          <Paper
-            sx={{
-              flexBasis: { xs: 'auto', lg: 360 },
-              p: 3,
-              borderRadius: 4,
-              background: 'linear-gradient(135deg, rgba(23,23,40,0.85), rgba(108,29,103,0.85))',
-              color: 'common.white',
-              backdropFilter: 'blur(12px)',
-              boxShadow: 8,
-            }}
-          >
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Playlist destacada
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 3, opacity: 0.8 }}>
-              Explora una selección curada con nuestros temas favoritos para acompañar tu día.
-            </Typography>
-            <Box
-              component="iframe"
-              sx={{
-                width: '100%',
-                height: 380,
-                border: 0,
-                borderRadius: 3,
-                boxShadow: (theme) => theme.shadows[6],
-              }}
-              src="https://open.spotify.com/embed/playlist/37i9dQZF1DX0XUsuxWHRQd?utm_source=generator&theme=0"
-              loading="lazy"
-              title="Elite Clan Playlist"
-              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            />
-          </Paper>
+      {isLoading ? (
+        <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
+          <CircularProgress color="primary" />
+          <Typography color="text.secondary">Cargando lanzamientos...</Typography>
         </Stack>
+      ) : null}
+      {error ? (
+        <Alert severity="error" sx={{ mb: 4 }}>
+          No se pudieron cargar los lanzamientos. Intenta nuevamente más tarde.
+        </Alert>
+      ) : null}
+      {!isLoading && !error && !latestRelease ? (
+        <Alert severity="info" sx={{ mb: 4 }}>
+          Aún no hay lanzamientos registrados.
+        </Alert>
+      ) : null}
+      <Stack spacing={4}>
+        {latestRelease ? (
+          <Stack direction={{ xs: 'column', lg: 'row' }} spacing={4} alignItems="stretch">
+            <Card sx={{ flex: 1, display: 'flex', flexDirection: { xs: 'column', md: 'row' } }}>
+              <Box
+                component="img"
+                src={latestRelease.coverArtUrl}
+                alt={latestRelease.title}
+                sx={{
+                  width: { xs: '100%', md: 320 },
+                  height: { xs: 220, md: '100%' },
+                  objectFit: 'cover',
+                }}
+              />
+              <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <Typography variant="overline" sx={{ letterSpacing: 1 }}>
+                  Último lanzamiento · {dayjs(latestRelease.releaseDate).format('D [de] MMMM YYYY')}
+                </Typography>
+                <Typography variant="h4" sx={{ mt: 1, mb: 2 }}>
+                  {latestRelease.title}
+                </Typography>
+                <Typography sx={{ mb: 3 }}>{latestRelease.description}</Typography>
+                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, mb: 3 }}>
+                  {(latestRelease.genres ?? []).map((genre) => (
+                    <Chip key={genre} label={genre} color="primary" variant="outlined" />
+                  ))}
+                </Stack>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 'auto' }}>
+                  {latestRelease.links.spotify ? (
+                    <Button
+                      component="a"
+                      href={latestRelease.links.spotify}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      variant="contained"
+                      startIcon={<SpotifyIcon />}
+                    >
+                      Escuchar en Spotify
+                    </Button>
+                  ) : null}
+                  {latestRelease.links.appleMusic ? (
+                    <Button
+                      component="a"
+                      href={latestRelease.links.appleMusic}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      variant="outlined"
+                      startIcon={<AppleIcon />}
+                    >
+                      Apple Music
+                    </Button>
+                  ) : null}
+                  {latestRelease.links.youtube ? (
+                    <Button
+                      component="a"
+                      href={latestRelease.links.youtube}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      variant="outlined"
+                      startIcon={<YouTubeIcon />}
+                    >
+                      YouTube
+                    </Button>
+                  ) : null}
+                </Stack>
+              </CardContent>
+            </Card>
 
-        <Grid container spacing={3}>
-          {catalog.map((release) => (
-            <Grid key={release.title} item xs={12} sm={6} lg={4}>
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CardMedia component="img" height="200" image={release.art} alt={release.title} />
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography variant="overline" sx={{ letterSpacing: 1 }}>
-                    {release.date}
-                  </Typography>
-                  <Typography variant="h6" sx={{ mt: 1, mb: 1 }}>
-                    {release.title}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {release.description}
-                  </Typography>
-                </CardContent>
-                <CardActions sx={{ gap: 1, flexWrap: 'wrap', px: 2, pb: 2 }}>
-                  <Button
-                    component="a"
-                    href={release.links.spotify}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    size="small"
-                    startIcon={<SpotifyIcon fontSize="small" />}
-                  >
-                    Spotify
-                  </Button>
-                  <Button
-                    component="a"
-                    href={release.links.apple}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    size="small"
-                    startIcon={<AppleIcon fontSize="small" />}
-                  >
-                    Apple
-                  </Button>
-                  <Button
-                    component="a"
-                    href={release.links.youtube}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    size="small"
-                    startIcon={<YouTubeIcon fontSize="small" />}
-                  >
-                    YouTube
-                  </Button>
-                </CardActions>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+            {playlistEmbedUrl ? (
+              <Paper
+                sx={{
+                  flexBasis: { xs: 'auto', lg: 360 },
+                  p: 3,
+                  borderRadius: 4,
+                  background: 'linear-gradient(135deg, rgba(23,23,40,0.85), rgba(108,29,103,0.85))',
+                  color: 'common.white',
+                  backdropFilter: 'blur(12px)',
+                  boxShadow: 8,
+                }}
+              >
+                <Typography variant="h6" sx={{ mb: 1 }}>
+                  Playlist destacada
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 3, opacity: 0.8 }}>
+                  Explora una selección curada con nuestros temas favoritos para acompañar tu día.
+                </Typography>
+                <Box
+                  component="iframe"
+                  sx={{
+                    width: '100%',
+                    height: 380,
+                    border: 0,
+                    borderRadius: 3,
+                    boxShadow: (theme) => theme.shadows[6],
+                  }}
+                  src={playlistEmbedUrl}
+                  loading="lazy"
+                  title="Elite Clan Playlist"
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                />
+              </Paper>
+            ) : null}
+          </Stack>
+        ) : null}
+
+        {catalog.length ? (
+          <Grid container spacing={3}>
+            {catalog.map((release) => (
+              <Grid key={release.id} item xs={12} sm={6} lg={4}>
+                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <CardMedia component="img" height="200" image={release.coverArtUrl} alt={release.title} />
+                  <CardContent sx={{ flexGrow: 1 }}>
+                    <Typography variant="overline" sx={{ letterSpacing: 1 }}>
+                      {dayjs(release.releaseDate).format('D [de] MMMM YYYY')}
+                    </Typography>
+                    <Typography variant="h6" sx={{ mt: 1, mb: 1 }}>
+                      {release.title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {release.description}
+                    </Typography>
+                  </CardContent>
+                  <CardActions sx={{ gap: 1, flexWrap: 'wrap', px: 2, pb: 2 }}>
+                    {release.links.spotify ? (
+                      <Button
+                        component="a"
+                        href={release.links.spotify}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        size="small"
+                        startIcon={<SpotifyIcon fontSize="small" />}
+                      >
+                        Spotify
+                      </Button>
+                    ) : null}
+                    {release.links.appleMusic ? (
+                      <Button
+                        component="a"
+                        href={release.links.appleMusic}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        size="small"
+                        startIcon={<AppleIcon fontSize="small" />}
+                      >
+                        Apple
+                      </Button>
+                    ) : null}
+                    {release.links.youtube ? (
+                      <Button
+                        component="a"
+                        href={release.links.youtube}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        size="small"
+                        startIcon={<YouTubeIcon fontSize="small" />}
+                      >
+                        YouTube
+                      </Button>
+                    ) : null}
+                  </CardActions>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        ) : null}
       </Stack>
     </Box>
   );

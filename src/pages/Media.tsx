@@ -6,8 +6,10 @@ import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import YouTubeIcon from '@mui/icons-material/YouTube';
 import {
+  Alert,
   Box,
   Button,
+  CircularProgress,
   Dialog,
   IconButton,
   ImageList,
@@ -17,38 +19,9 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-
-const MEDIA_ITEMS = [
-  'https://images.unsplash.com/photo-1511379938547-c1f69419868d',
-  'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4',
-  'https://images.unsplash.com/photo-1516280440614-37939bbacd81',
-  'https://images.unsplash.com/photo-1492684223066-81342ee5ff30',
-].map((src) => ({ type: 'image' as const, src }));
-
-const HIGHLIGHTS = [
-  {
-    type: 'video' as const,
-    title: 'Mix Showcase (YouTube)',
-    platform: 'youtube',
-    embedUrl: 'https://www.youtube.com/embed/2Vv-BfVoq4g',
-    thumbnail: 'https://img.youtube.com/vi/2Vv-BfVoq4g/hqdefault.jpg',
-  },
-  {
-    type: 'video' as const,
-    title: 'Highlights en Vivo (YouTube)',
-    platform: 'youtube',
-    embedUrl: 'https://www.youtube.com/embed/CevxZvSJLk8',
-    thumbnail: 'https://img.youtube.com/vi/CevxZvSJLk8/hqdefault.jpg',
-  },
-  {
-    type: 'video' as const,
-    title: 'Reel detrás de cámaras',
-    platform: 'instagram',
-    embedUrl: 'https://www.instagram.com/reel/Cw3uK3lS6xP/embed',
-    thumbnail:
-      'https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=600&q=60',
-  },
-];
+import { listMediaItems, listSiteSettings } from '../services/contentRepository';
+import { useContentQuery } from '../hooks/useContentQuery';
+import type { MediaItem, SiteSettings } from '../types/content';
 
 type LightboxState = {
   collection: 'media' | 'highlights';
@@ -61,10 +34,30 @@ export function Media() {
   const isSmUp = useMediaQuery(theme.breakpoints.up('sm'));
   const [lightbox, setLightbox] = useState<LightboxState>(null);
 
+  const {
+    data: mediaItems,
+    loading: mediaLoading,
+    error: mediaError,
+  } = useContentQuery<MediaItem[]>(listMediaItems, []);
+  const {
+    data: siteSettings,
+  } = useContentQuery<SiteSettings[]>(listSiteSettings, []);
+
+  const socialLinks = siteSettings?.[0]?.socialLinks ?? {};
+
+  const galleryItems = useMemo(
+    () => (mediaItems ?? []).filter((item) => item.type === 'image'),
+    [mediaItems],
+  );
+  const highlightItems = useMemo(
+    () => (mediaItems ?? []).filter((item) => item.type === 'video'),
+    [mediaItems],
+  );
+
   const activeCollection = useMemo(() => {
     if (!lightbox) return [];
-    return lightbox.collection === 'media' ? MEDIA_ITEMS : HIGHLIGHTS;
-  }, [lightbox]);
+    return lightbox.collection === 'media' ? galleryItems : highlightItems;
+  }, [galleryItems, highlightItems, lightbox]);
 
   const activeItem = useMemo(() => {
     if (!lightbox) return null;
@@ -74,7 +67,7 @@ export function Media() {
   const handleNavigate = (direction: 1 | -1) => {
     setLightbox((current) => {
       if (!current) return current;
-      const collection = current.collection === 'media' ? MEDIA_ITEMS : HIGHLIGHTS;
+      const collection = current.collection === 'media' ? galleryItems : highlightItems;
       const count = collection.length;
       const nextIndex = (current.index + direction + count) % count;
       return { ...current, index: nextIndex };
@@ -93,82 +86,107 @@ export function Media() {
         <Typography variant="h3" sx={{ mb: 3 }}>
           Media
         </Typography>
-        <ImageList variant="masonry" cols={cols} gap={16}>
-          {MEDIA_ITEMS.map((item, index) => (
-            <ImageListItem key={item.src}>
-              <Box
-                component="img"
-                src={`${item.src}?auto=format&fit=crop&w=600&q=80`}
-                alt="Elite Clan"
-                onClick={() => setLightbox({ collection: 'media', index })}
-                sx={{
-                  width: '100%',
-                  display: 'block',
-                  borderRadius: 2,
-                  cursor: 'pointer',
-                  transition: 'transform 0.3s ease',
-                  '&:hover': {
-                    transform: 'scale(1.05)',
-                  },
-                }}
-              />
-            </ImageListItem>
-          ))}
-        </ImageList>
+        {mediaLoading ? (
+          <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
+            <CircularProgress color="primary" />
+            <Typography color="text.secondary">Cargando galería...</Typography>
+          </Stack>
+        ) : mediaError ? (
+          <Alert severity="error" sx={{ mb: 4 }}>
+            No se pudo cargar la galería multimedia. Intenta nuevamente más tarde.
+          </Alert>
+        ) : !galleryItems.length ? (
+          <Alert severity="info" sx={{ mb: 4 }}>
+            Aún no hay fotografías publicadas.
+          </Alert>
+        ) : (
+          <ImageList variant="masonry" cols={cols} gap={16}>
+            {galleryItems.map((item, index) => (
+              <ImageListItem key={item.id}>
+                <Box
+                  component="img"
+                  src={`${item.mediaUrl}?auto=format&fit=crop&w=600&q=80`}
+                  alt={item.title ?? 'Elite Clan'}
+                  onClick={() => setLightbox({ collection: 'media', index })}
+                  sx={{
+                    width: '100%',
+                    display: 'block',
+                    borderRadius: 2,
+                    cursor: 'pointer',
+                    transition: 'transform 0.3s ease',
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                    },
+                  }}
+                />
+              </ImageListItem>
+            ))}
+          </ImageList>
+        )}
       </Box>
 
       <Box>
         <Typography variant="h4" sx={{ mb: 2 }}>
           Highlights
         </Typography>
-        <Stack
-          direction="row"
-          spacing={2}
-          sx={{
-            overflowX: 'auto',
-            py: 1,
-            scrollSnapType: 'x mandatory',
-            '&::-webkit-scrollbar': { display: 'none' },
-          }}
-        >
-          {HIGHLIGHTS.map((highlight, index) => (
-            <Box
-              key={highlight.title}
-              onClick={() => setLightbox({ collection: 'highlights', index })}
-              sx={{
-                minWidth: { xs: '85%', sm: 360 },
-                scrollSnapAlign: 'center',
-                borderRadius: 3,
-                overflow: 'hidden',
-                boxShadow: 3,
-                cursor: 'pointer',
-                transition: 'transform 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-6px) scale(1.01)',
-                },
-              }}
-            >
+        {mediaLoading ? null : !highlightItems.length ? (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            No hay videos destacados disponibles.
+          </Alert>
+        ) : (
+          <Stack
+            direction="row"
+            spacing={2}
+            sx={{
+              overflowX: 'auto',
+              py: 1,
+              scrollSnapType: 'x mandatory',
+              '&::-webkit-scrollbar': { display: 'none' },
+            }}
+          >
+            {highlightItems.map((highlight, index) => (
               <Box
-                component="img"
-                src={highlight.thumbnail}
-                alt={highlight.title}
+                key={highlight.id}
+                onClick={() => setLightbox({ collection: 'highlights', index })}
                 sx={{
-                  width: '100%',
-                  aspectRatio: '16 / 9',
-                  objectFit: 'cover',
+                  minWidth: { xs: '85%', sm: 360 },
+                  scrollSnapAlign: 'center',
+                  borderRadius: 3,
+                  overflow: 'hidden',
+                  boxShadow: 3,
+                  cursor: 'pointer',
+                  transition: 'transform 0.3s ease',
+                  '&:hover': {
+                    transform: 'translateY(-6px) scale(1.01)',
+                  },
                 }}
-              />
-              <Box sx={{ p: 2 }}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  {highlight.title}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {highlight.platform === 'instagram' ? 'Instagram Reel' : 'YouTube Clip'}
-                </Typography>
+              >
+                <Box
+                  component="img"
+                  src={highlight.thumbnailUrl ?? highlight.mediaUrl}
+                  alt={highlight.title ?? 'Highlight'}
+                  sx={{
+                    width: '100%',
+                    aspectRatio: '16 / 9',
+                    objectFit: 'cover',
+                  }}
+                />
+                <Box sx={{ p: 2 }}>
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    {highlight.title ?? 'Video destacado'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {highlight.platform === 'instagram'
+                      ? 'Instagram Reel'
+                      : highlight.platform === 'youtube'
+                        ? 'YouTube Clip'
+                        : 'Video'}
+                  </Typography>
+                </Box>
               </Box>
-            </Box>
-          ))}
-        </Stack>
+            ))}
+          </Stack>
+        )}
       </Box>
 
       <Box
@@ -192,45 +210,51 @@ export function Media() {
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={2}
-          justifyContent="center"
-          alignItems="center"
-        >
-          <Button
-            variant="contained"
-            color="secondary"
-            size="large"
-            startIcon={<InstagramIcon />}
-            href="https://www.instagram.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            sx={{ minWidth: 200 }}
-          >
-            Instagram
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            size="large"
-            startIcon={<YouTubeIcon />}
-            href="https://www.youtube.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            sx={{ minWidth: 200 }}
-          >
-            YouTube
-          </Button>
-          <Button
-            variant="contained"
-            color="inherit"
-            size="large"
-            startIcon={<MusicNoteIcon />}
-            href="https://www.tiktok.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            sx={{ minWidth: 200 }}
-          >
-            TikTok
-          </Button>
+        justifyContent="center"
+        alignItems="center"
+      >
+          {socialLinks.instagram ? (
+            <Button
+              variant="contained"
+              color="secondary"
+              size="large"
+              startIcon={<InstagramIcon />}
+              href={socialLinks.instagram}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ minWidth: 200 }}
+            >
+              Instagram
+            </Button>
+          ) : null}
+          {socialLinks.youtube ? (
+            <Button
+              variant="contained"
+              color="primary"
+              size="large"
+              startIcon={<YouTubeIcon />}
+              href={socialLinks.youtube}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ minWidth: 200 }}
+            >
+              YouTube
+            </Button>
+          ) : null}
+          {socialLinks.tiktok ? (
+            <Button
+              variant="contained"
+              color="inherit"
+              size="large"
+              startIcon={<MusicNoteIcon />}
+              href={socialLinks.tiktok}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ minWidth: 200 }}
+            >
+              TikTok
+            </Button>
+          ) : null}
         </Stack>
       </Box>
 
@@ -297,8 +321,8 @@ export function Media() {
             {activeItem.type === 'image' ? (
               <Box
                 component="img"
-                src={`${activeItem.src}?auto=format&fit=contain&w=1600&q=80`}
-                alt="Media highlight"
+                src={`${activeItem.mediaUrl}?auto=format&fit=contain&w=1600&q=80`}
+                alt={activeItem.title ?? 'Media highlight'}
                 sx={{
                   maxHeight: '80vh',
                   maxWidth: '90vw',
@@ -321,8 +345,8 @@ export function Media() {
               >
                 <Box
                   component="iframe"
-                  src={activeItem.embedUrl}
-                  title={activeItem.title}
+                  src={activeItem.embedUrl ?? activeItem.mediaUrl}
+                  title={activeItem.title ?? 'Video'}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                   sx={{
@@ -347,7 +371,7 @@ export function Media() {
                   px: 3,
                 }}
               >
-                {activeItem.title}
+                {activeItem.title ?? 'Video'}
               </Typography>
             )}
           </Box>

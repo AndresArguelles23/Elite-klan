@@ -1,15 +1,18 @@
-import type { ComponentProps } from 'react';
+import { useMemo } from 'react';
+import type { ComponentProps, ReactElement } from 'react';
 
 import {
   Box,
   Button,
   ButtonGroup,
+  CircularProgress,
   Chip,
   IconButton,
   Paper,
   Stack,
   SvgIcon,
   Typography,
+  Alert,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import AppleIcon from '@mui/icons-material/Apple';
@@ -19,6 +22,11 @@ import InstagramIcon from '@mui/icons-material/Instagram';
 import FacebookIcon from '@mui/icons-material/Facebook';
 import XIcon from '@mui/icons-material/X';
 import { Link as RouterLink } from 'react-router-dom';
+import dayjs from 'dayjs';
+import 'dayjs/locale/es';
+import { listReleases, listShows, listSiteSettings } from '../services/contentRepository';
+import { useContentQuery } from '../hooks/useContentQuery';
+import type { Release, Show, SiteSettings } from '../types/content';
 
 function SpotifyIcon(props: ComponentProps<typeof SvgIcon>) {
   return (
@@ -31,8 +39,75 @@ function SpotifyIcon(props: ComponentProps<typeof SvgIcon>) {
 }
 
 export function Home() {
-  const releaseDate = '15 de marzo, 2025';
+  dayjs.locale('es');
 
+  const {
+    data: releases,
+    loading: releasesLoading,
+    error: releasesError,
+  } = useContentQuery<Release[]>(listReleases, []);
+  const {
+    data: shows,
+    loading: showsLoading,
+    error: showsError,
+  } = useContentQuery<Show[]>(listShows, []);
+  const {
+    data: settings,
+    loading: settingsLoading,
+    error: settingsError,
+  } = useContentQuery<SiteSettings[]>(listSiteSettings, []);
+
+  const latestRelease = releases?.[0] ?? null;
+  const siteSettings = settings?.[0] ?? null;
+
+  const nextShow = useMemo(() => {
+    if (!shows?.length) {
+      return null;
+    }
+
+    const sorted = [...shows].sort(
+      (a, b) => dayjs(a.startAt).valueOf() - dayjs(b.startAt).valueOf(),
+    );
+    const now = dayjs();
+    return (
+      sorted.find((show) => dayjs(show.startAt).isAfter(now)) ?? sorted[sorted.length - 1]
+    );
+  }, [shows]);
+
+  const heroVideoUrl = siteSettings?.heroVideoUrl ?? undefined;
+  const heroTagline = siteSettings?.heroTagline ?? 'Nuevo lanzamiento';
+  const heroTitle = siteSettings?.heroTitle ?? 'Próximamente';
+  const heroDescription = siteSettings?.heroDescription ?? 'Pronto conocerás nuestro próximo lanzamiento.';
+  const releaseDateLabel = siteSettings?.releaseDateLabel
+    ?? (latestRelease?.releaseDate ? dayjs(latestRelease.releaseDate).format('D [de] MMMM, YYYY') : 'Por anunciar');
+
+  const socialLinks = siteSettings?.socialLinks ?? {};
+
+  const isLoading = releasesLoading || showsLoading || settingsLoading;
+  const hasError = releasesError || showsError || settingsError;
+
+  const formatShowDate = (show: Show) => dayjs(show.startAt).format('D [de] MMMM, YYYY · HH:mm');
+  const showLocation = nextShow ? `${nextShow.city}${nextShow.venue ? `, ${nextShow.venue}` : ''}` : null;
+
+  const streamingLinks = latestRelease
+    ? ([
+        latestRelease.links.spotify && {
+          label: 'Spotify' as const,
+          icon: <SpotifyIcon fontSize="small" />,
+          url: latestRelease.links.spotify,
+        },
+        latestRelease.links.appleMusic && {
+          label: 'Apple Music' as const,
+          icon: <AppleIcon fontSize="small" />,
+          url: latestRelease.links.appleMusic,
+        },
+        latestRelease.links.youtube && {
+          label: 'YouTube' as const,
+          icon: <YouTubeIcon fontSize="small" />,
+          url: latestRelease.links.youtube,
+        },
+      ].filter(Boolean) as Array<{ label: string; icon: ReactElement; url: string }>)
+    : [];
   return (
     <Box
       component="section"
@@ -48,33 +123,48 @@ export function Home() {
         backgroundColor: '#050505',
       }}
     >
-      <Box
-        component="video"
-        autoPlay
-        muted
-        loop
-        playsInline
-        src="https://storage.googleapis.com/coverr-main/mp4/Footboys.mp4"
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          filter: 'brightness(0.65)',
-          zIndex: 0,
-          pointerEvents: 'none',
-          '&::before': {
-            content: '""',
+      {heroVideoUrl ? (
+        <Box
+          component="video"
+          autoPlay
+          muted
+          loop
+          playsInline
+          src={heroVideoUrl}
+          sx={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(120deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.35) 60%, rgba(0,0,0,0.9) 100%)',
-          },
-        }}
-      />
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            filter: 'brightness(0.65)',
+            zIndex: 0,
+            pointerEvents: 'none',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              inset: 0,
+              background: 'linear-gradient(120deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.35) 60%, rgba(0,0,0,0.9) 100%)',
+            },
+          }}
+        />
+      ) : null}
       <Stack spacing={3} alignItems="flex-start" maxWidth={760} zIndex={1}>
+        {isLoading ? (
+          <Stack spacing={2} alignItems="center" sx={{ width: '100%', py: 4 }}>
+            <CircularProgress color="primary" />
+            <Typography variant="body1" color="grey.300">
+              Preparando contenido...
+            </Typography>
+          </Stack>
+        ) : null}
+        {hasError ? (
+          <Alert severity="error" sx={{ width: '100%' }}>
+            No pudimos cargar el contenido más reciente. Revisa tu conexión o intenta de nuevo.
+          </Alert>
+        ) : null}
         <Chip
-          label="Nuevo single"
+          label={heroTagline}
           color="primary"
           sx={{
             textTransform: 'uppercase',
@@ -90,38 +180,43 @@ export function Home() {
           }}
         />
         <Typography variant="h1" sx={{ fontSize: { xs: 36, md: 64 } }}>
-          Sonido Elite. Energía en vivo.
+          {heroTitle}
         </Typography>
         <Typography variant="h6" color="grey.200">
-          Elite Clan fusiona ritmos urbanos y latinos con atmósferas futuristas. Dale play al lanzamiento y siente la vibra antes del tour.
+          {heroDescription}
         </Typography>
         <Typography variant="subtitle2" color="grey.300" sx={{ textTransform: 'uppercase', letterSpacing: 4 }}>
-          Lanzamiento oficial · {releaseDate}
+          Lanzamiento oficial · {releaseDateLabel}
         </Typography>
-        <ButtonGroup
-          variant="contained"
-          aria-label="Escucha en plataformas"
-          sx={{
-            '& .MuiButton-root': {
-              transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-              backdropFilter: 'blur(4px)',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 14px 30px rgba(0,0,0,0.35)',
+        {streamingLinks.length ? (
+          <ButtonGroup
+            variant="contained"
+            aria-label="Escucha en plataformas"
+            sx={{
+              '& .MuiButton-root': {
+                transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                backdropFilter: 'blur(4px)',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 14px 30px rgba(0,0,0,0.35)',
+                },
               },
-            },
-          }}
-        >
-          <Button startIcon={<SpotifyIcon fontSize="small" />} component="a" href="https://open.spotify.com" target="_blank" rel="noopener noreferrer">
-            Spotify
-          </Button>
-          <Button startIcon={<AppleIcon fontSize="small" />} component="a" href="https://music.apple.com" target="_blank" rel="noopener noreferrer">
-            Apple Music
-          </Button>
-          <Button startIcon={<YouTubeIcon fontSize="small" />} component="a" href="https://music.youtube.com" target="_blank" rel="noopener noreferrer">
-            YouTube
-          </Button>
-        </ButtonGroup>
+            }}
+          >
+            {streamingLinks.map((link) => (
+              <Button
+                key={link.label}
+                startIcon={link.icon}
+                component="a"
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {link.label}
+              </Button>
+            ))}
+          </ButtonGroup>
+        ) : null}
         <Paper
           elevation={12}
           sx={{
@@ -147,13 +242,17 @@ export function Home() {
             <Typography variant="overline" color="primary.light" sx={{ letterSpacing: 2 }}>
               Próximo show
             </Typography>
-            <Typography variant="h5">Medellín, Colombia</Typography>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <CalendarMonthIcon fontSize="small" />
-              <Typography variant="body2" color="grey.300">
-                22 de abril, 2025 · Teatro Metropolitano
-              </Typography>
-            </Stack>
+            <Typography variant="h5">
+              {showLocation ?? 'Pendiente por anunciar'}
+            </Typography>
+            {nextShow ? (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <CalendarMonthIcon fontSize="small" />
+                <Typography variant="body2" color="grey.300">
+                  {formatShowDate(nextShow)}
+                </Typography>
+              </Stack>
+            ) : null}
           </Stack>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
             <Button
@@ -173,57 +272,63 @@ export function Home() {
               Comprar boletas
             </Button>
             <Stack direction="row" spacing={1}>
-              <IconButton
-                color="inherit"
-                component="a"
-                href="https://instagram.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{
-                  color: 'grey.100',
-                  transition: 'transform 0.25s ease, background-color 0.25s ease',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    backgroundColor: 'rgba(255,255,255,0.12)',
-                  },
-                }}
-              >
-                <InstagramIcon />
-              </IconButton>
-              <IconButton
-                color="inherit"
-                component="a"
-                href="https://facebook.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{
-                  color: 'grey.100',
-                  transition: 'transform 0.25s ease, background-color 0.25s ease',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    backgroundColor: 'rgba(255,255,255,0.12)',
-                  },
-                }}
-              >
-                <FacebookIcon />
-              </IconButton>
-              <IconButton
-                color="inherit"
-                component="a"
-                href="https://x.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{
-                  color: 'grey.100',
-                  transition: 'transform 0.25s ease, background-color 0.25s ease',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    backgroundColor: 'rgba(255,255,255,0.12)',
-                  },
-                }}
-              >
-                <XIcon />
-              </IconButton>
+              {socialLinks.instagram ? (
+                <IconButton
+                  color="inherit"
+                  component="a"
+                  href={socialLinks.instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{
+                    color: 'grey.100',
+                    transition: 'transform 0.25s ease, background-color 0.25s ease',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      backgroundColor: 'rgba(255,255,255,0.12)',
+                    },
+                  }}
+                >
+                  <InstagramIcon />
+                </IconButton>
+              ) : null}
+              {socialLinks.facebook ? (
+                <IconButton
+                  color="inherit"
+                  component="a"
+                  href={socialLinks.facebook}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{
+                    color: 'grey.100',
+                    transition: 'transform 0.25s ease, background-color 0.25s ease',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      backgroundColor: 'rgba(255,255,255,0.12)',
+                    },
+                  }}
+                >
+                  <FacebookIcon />
+                </IconButton>
+              ) : null}
+              {socialLinks.x ? (
+                <IconButton
+                  color="inherit"
+                  component="a"
+                  href={socialLinks.x}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{
+                    color: 'grey.100',
+                    transition: 'transform 0.25s ease, background-color 0.25s ease',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      backgroundColor: 'rgba(255,255,255,0.12)',
+                    },
+                  }}
+                >
+                  <XIcon />
+                </IconButton>
+              ) : null}
             </Stack>
           </Stack>
         </Paper>
